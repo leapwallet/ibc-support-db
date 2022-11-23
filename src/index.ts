@@ -73,40 +73,53 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
-    const response = await fetch('https://proxy.atomscan.com/directory/_IBC/', {
-      headers: {
-        'content-type': 'text/html;charset=UTF-8',
-      },
-    });
-    if (!response.ok) {
-      return;
-    }
-    const rawHTML = await response.text();
-    const root = parse(rawHTML);
-    const elements = root.querySelectorAll('.line > a[href$=".json"]');
-    const ibcSupport: Record<string, string[]> = {};
-    const hrefs: string[] = [];
-    elements.forEach((element) => {
-      const href = element.getAttribute('href');
-      if (href) {
-        hrefs.push(href);
-        const [src, dest] = href.slice(0, -5).split('-');
-        if (ibcSupport[src]) {
-          ibcSupport[src].push(dest);
-        } else {
-          ibcSupport[src] = [dest];
+    console.log('CRON Started');
+    try {
+      const response = await fetch(
+        'https://proxy.atomscan.com/directory/_IBC/',
+        {
+          headers: {
+            'content-type': 'text/html;charset=UTF-8',
+          },
         }
+      );
+      if (!response.ok) {
+        throw new Error('Response not ok');
       }
-    });
-    await env.IBC_SUPPORT_DATA.put('all', JSON.stringify(ibcSupport));
-    await Promise.all(
-      hrefs.map(async (href) => {
-        const res = await fetch(
-          `https://proxy.atomscan.com/directory/_IBC/${href}`
-        );
-        const data = await res.json();
-        await env.IBC_SUPPORT_DATA.put(href.slice(0, -5), JSON.stringify(data));
-      })
-    );
+      const rawHTML = await response.text();
+      const root = parse(rawHTML);
+      const elements = root.querySelectorAll('.line > a[href$=".json"]');
+      const ibcSupport: Record<string, string[]> = {};
+      const hrefs: string[] = [];
+      elements.forEach((element) => {
+        const href = element.getAttribute('href');
+        if (href) {
+          hrefs.push(href);
+          const [src, dest] = href.slice(0, -5).split('-');
+          if (ibcSupport[src]) {
+            ibcSupport[src].push(dest);
+          } else {
+            ibcSupport[src] = [dest];
+          }
+        }
+      });
+      await env.IBC_SUPPORT_DATA.put('all', JSON.stringify(ibcSupport));
+      await Promise.all(
+        hrefs.map(async (href) => {
+          const res = await fetch(
+            `https://proxy.atomscan.com/directory/_IBC/${href}`
+          );
+          const data = await res.json();
+          await env.IBC_SUPPORT_DATA.put(
+            href.slice(0, -5),
+            JSON.stringify(data)
+          );
+        })
+      );
+      console.log('CRON Success');
+    } catch (err) {
+      console.log('CRON Error', err);
+    }
+    console.log('CRON Ended');
   },
 };
