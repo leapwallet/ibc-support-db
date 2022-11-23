@@ -1,0 +1,13 @@
+name = "ibc-support-db"
+main = "src/index.ts"
+compatibility_date = "2022-11-23"
+
+# mayank.yadav@leapwallet.io's account id
+account_id="4dd2facb27071ae6ec329a7096a86c9d"
+
+kv_namespaces = [
+  { binding = "IBC_SUPPORT_DATA", id = "d6a278d5f0bd48c8aa7995bc1a13fba9", preview_id = "48c63c97e8304031a87656be8ba2baea" }
+]
+
+[triggers]
+crons = [ "0 0 * * *" ]
