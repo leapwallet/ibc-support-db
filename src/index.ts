@@ -33,40 +33,74 @@ const notFound = () =>
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const { pathname } = new URL(request.url);
-    const [, basePath] = pathname.split('/');
+    const cacheUrl = new URL(request.url);
 
-    if (basePath === '') {
-      const ibcSupportData = await env.IBC_SUPPORT_DATA.get('all', {
-        type: 'json',
-      });
-      if (ibcSupportData === null) {
-        return notFound();
-      }
-      return new Response(JSON.stringify(ibcSupportData), successfulInit);
-    } else if (chainPairJsonMatcher.test(basePath)) {
-      const ibcSupportData = await env.IBC_SUPPORT_DATA.get(basePath, {
-        type: 'json',
-      });
-      if (ibcSupportData === null) {
-        return notFound();
-      }
-      return new Response(JSON.stringify(ibcSupportData), successfulInit);
-    } else if (chainMatcher.test(basePath)) {
-      const ibcSupportData: Record<string, any> | null =
-        await env.IBC_SUPPORT_DATA.get('all', {
+    // Construct the cache key from the cache URL
+    const cacheKey = new Request(cacheUrl.toString(), request);
+    const cache = caches.default;
+
+    // Check whether the value is already available in the cache
+    // if not, you will need to fetch it from origin, and store it in the cache
+    // for future access
+    let cacheResponse = await cache.match(cacheKey);
+
+    if (!cacheResponse) {
+      const { pathname } = cacheUrl;
+      const [, basePath] = pathname.split('/');
+      let response: Response;
+
+      if (basePath === '') {
+        const ibcSupportData = await env.IBC_SUPPORT_DATA.get('all', {
           type: 'json',
         });
-      if (ibcSupportData === null) {
-        return notFound();
+        if (ibcSupportData === null) {
+          response = notFound();
+        } else {
+          response = new Response(
+            JSON.stringify(ibcSupportData),
+            successfulInit
+          );
+        }
+      } else if (chainPairJsonMatcher.test(basePath)) {
+        const ibcSupportData = await env.IBC_SUPPORT_DATA.get(basePath, {
+          type: 'json',
+        });
+        if (ibcSupportData === null) {
+          response = notFound();
+        } else {
+          response = new Response(
+            JSON.stringify(ibcSupportData),
+            successfulInit
+          );
+        }
+      } else if (chainMatcher.test(basePath)) {
+        const ibcSupportData: Record<string, any> | null =
+          await env.IBC_SUPPORT_DATA.get('all', {
+            type: 'json',
+          });
+        if (ibcSupportData === null) {
+          response = notFound();
+        } else {
+          const data = ibcSupportData[basePath];
+          if (data === undefined) {
+            response = notFound();
+          } else {
+            response = new Response(JSON.stringify(data), successfulInit);
+          }
+        }
+      } else {
+        response = notFound();
       }
-      const data = ibcSupportData[basePath];
-      if (data === undefined) {
-        return notFound();
-      }
-      return new Response(JSON.stringify(data), successfulInit);
+      response.headers.append('Cache-Control', 's-maxage=3600');
+      // Store the fetched response as cacheKey
+      // Use waitUntil so you can return the response without blocking on
+      // writing to cache
+      ctx.waitUntil(cache.put(cacheKey, response.clone()));
+      return response;
+    } else {
+      console.log(`Cache hit for: ${request.url}.`);
+      return cacheResponse;
     }
-    return notFound();
   },
   async scheduled(
     controller: ScheduledController,
@@ -89,7 +123,7 @@ export default {
       const rawHTML = await response.text();
       const root = parse(rawHTML);
       const elements = root.querySelectorAll('.line > a[href$=".json"]');
-      const ibcSupport: Record<string, string[]> = {};
+      const ibcSupport: Record<string, Record<string, boolean>> = {};
       const hrefs: string[] = [];
       elements.forEach((element) => {
         const href = element.getAttribute('href');
@@ -97,25 +131,38 @@ export default {
           hrefs.push(href);
           const [src, dest] = href.slice(0, -5).split('-');
           if (ibcSupport[src]) {
-            ibcSupport[src].push(dest);
+            ibcSupport[src][dest] = true;
           } else {
-            ibcSupport[src] = [dest];
+            ibcSupport[src] = { [dest]: true };
+          }
+          if (ibcSupport[dest]) {
+            ibcSupport[dest][src] = true;
+          } else {
+            ibcSupport[dest] = { [src]: true };
           }
         }
       });
-      await env.IBC_SUPPORT_DATA.put('all', JSON.stringify(ibcSupport));
-      await Promise.all(
-        hrefs.map(async (href) => {
-          const res = await fetch(
-            `https://proxy.atomscan.com/directory/_IBC/${href}`
-          );
-          const data = await res.json();
-          await env.IBC_SUPPORT_DATA.put(
-            href.slice(0, -5),
-            JSON.stringify(data)
-          );
-        })
-      );
+      const allData: Record<string, string[]> = Object.entries(
+        ibcSupport
+      ).reduce((acc, [key, value]) => {
+        return {
+          ...acc,
+          [key]: Object.keys(value),
+        };
+      }, {});
+      await env.IBC_SUPPORT_DATA.put('all', JSON.stringify(allData));
+      // await Promise.all(
+      //   hrefs.map(async (href) => {
+      //     const res = await fetch(
+      //       `https://proxy.atomscan.com/directory/_IBC/${href}`
+      //     );
+      //     const data = await res.json();
+      //     await env.IBC_SUPPORT_DATA.put(
+      //       href.slice(0, -5),
+      //       JSON.stringify(data)
+      //     );
+      //   })
+      // );
       console.log('CRON Success');
     } catch (err) {
       console.log('CRON Error', err);
