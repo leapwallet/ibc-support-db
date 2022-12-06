@@ -1,6 +1,9 @@
 name: Update IBC Support
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     - cron: "0 0 * * *"
 

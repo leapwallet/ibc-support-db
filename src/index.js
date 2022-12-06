@@ -42,13 +42,21 @@ const main = async () => {
     const data = JSON.stringify(allData);
     await fs.writeFile(path.join(__dirname, '../data/all.json'), data);
     await Promise.all(
+      Object.entries(allData).map(([chain, ibcList]) => {
+        return fs.writeFile(
+          path.join(__dirname, '../data/chains', `${chain}.json`),
+          JSON.stringify(ibcList)
+        );
+      })
+    );
+    await Promise.all(
       hrefs.map(async (href) => {
         const res = await fetch(
           `https://proxy.atomscan.com/directory/_IBC/${href}`
         );
         const data = await res.json();
-        await fs.writeFile(
-          path.join(__dirname, '../data/', href),
+        return fs.writeFile(
+          path.join(__dirname, '../data/pairs', href),
           JSON.stringify(data)
         );
       })
