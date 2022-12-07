@@ -1,9 +1,6 @@
 name: Update IBC Support
 
 on:
-  push:
-    branches:
-      - main
   schedule:
     - cron: "0 0 * * *"
 
@@ -23,9 +20,6 @@ jobs:
             - name: Update DB
               uses: test-room-7/action-update-file@v1
               with:
-                  file-path: |
-                    data/all.json
-                    data/chains/*.json
-                    data/pairs/*.json
+                  file-path: "data/**/*.json"
                   commit-msg: update ibc support data
                   github-token: ${{ secrets.GITHUB_TOKEN }}
