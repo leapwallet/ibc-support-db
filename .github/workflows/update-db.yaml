@@ -23,7 +23,7 @@ jobs:
             - name: Update DB
               uses: test-room-7/action-update-file@v1
               with:
-                  file-path: "./data/**/*.json"
+                  file-path: "data/**/*.json"
                   allow-dot: true
                   commit-msg: update ibc support data
                   github-token: ${{ secrets.GITHUB_TOKEN }}
