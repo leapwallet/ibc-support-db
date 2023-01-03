@@ -1,25 +1,32 @@
 name: Update IBC Support
 
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: "0 0 * * *"
 
 jobs:
-    resources:
-        name: Update IBC Support Data
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
-            - uses: actions/setup-node@v3
-              with:
-                node-version: 16.13.0
-            - name: Get Deps
-              run: npm install
-            - name: Fetch Data
-              run: npm run fetch
-            - name: Update DB
-              uses: test-room-7/action-update-file@v1
-              with:
-                  file-path: "data/**/*.json"
-                  commit-msg: update ibc support data
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
+  s3:
+    name: Update s3 objects
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16.13.0
+      - name: Get Deps
+        run: npm install
+      - name: Fetch Data
+        run: npm run fetch
+      - name: Update S3 objects
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read --follow-symlinks --delete
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          SOURCE_DIR: "data"
+          DEST_DIR: "ibc-support-db"
