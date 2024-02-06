@@ -70,10 +70,52 @@ async function fetchFromPingPub(){
   }
 }
 
+async function fetchFromCosmosChainRegistry() {
+  const res = await fetch(
+    'https://api.github.com/repos/cosmos/chain-registry/git/trees/master?recursive=1'
+  );
+  const data = await res.json();
+  const COSMOS_CHAIN_REGISTRY_BASE_URL = data.tree.filter(
+    (folder) => folder.path === '_IBC'
+  )[0]?.url;
+
+  if (!COSMOS_CHAIN_REGISTRY_BASE_URL) {
+    return fetchFromPingPub();
+  }
+
+  const response = await fetch(COSMOS_CHAIN_REGISTRY_BASE_URL);
+  const ibcData = await response.json();
+  const hrefs = ibcData.tree
+    .filter((file) => file.path)
+    .map((file) => file.path);
+
+  const ibcSupport = {};
+
+  hrefs.forEach((href) => {
+    const [src, dest] = href.slice(0, -5).split('-');
+    if (ibcSupport[src]) {
+      ibcSupport[src][dest] = true;
+    } else {
+      ibcSupport[src] = { [dest]: true };
+    }
+    if (ibcSupport[dest]) {
+      ibcSupport[dest][src] = true;
+    } else {
+      ibcSupport[dest] = { [src]: true };
+    }
+  });
+
+  return {
+    baseUrl:
+      'https://raw.githubusercontent.com/cosmos/chain-registry/master/_IBC',
+    hrefs,
+    ibcSupport,
+  };
+}
 
 const main = async () => {
   try {
-    const { baseUrl, ibcSupport, hrefs } = await fetchFromPingPub() 
+    const { baseUrl, ibcSupport, hrefs } = await fetchFromCosmosChainRegistry() 
     const allData = Object.entries(ibcSupport).reduce((acc, [key, value]) => {
       return {
         ...acc,
