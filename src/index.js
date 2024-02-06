@@ -9,9 +9,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PINGPUB_BASEURL = 'https://registry.ping.pub/_IBC/'
 const ATOMSCAN_BASEURL = 'https://proxy.atomscan.com/directory/_IBC/'
-const COSMOS_CHAIN_REGISTRY_BASE_URL =
-  'https://api.github.com/repos/cosmos/chain-registry/git/trees/c67a1fa68ddbd7393111bf78a4f9faefdc515a3d';
-
 
 async function fetchFromAtomScan(){
     const response = await fetch(ATOMSCAN_BASEURL);
@@ -74,6 +71,18 @@ async function fetchFromPingPub(){
 }
 
 async function fetchFromCosmosChainRegistry() {
+  const res = await fetch(
+    'https://api.github.com/repos/cosmos/chain-registry/git/trees/master?recursive=1'
+  );
+  const data = await res.json();
+  const COSMOS_CHAIN_REGISTRY_BASE_URL = data.tree.filter(
+    (folder) => folder.path === '_IBC'
+  )[0]?.url;
+
+  if (!COSMOS_CHAIN_REGISTRY_BASE_URL) {
+    return fetchFromPingPub();
+  }
+
   const response = await fetch(COSMOS_CHAIN_REGISTRY_BASE_URL);
   const ibcData = await response.json();
   const hrefs = ibcData.tree
